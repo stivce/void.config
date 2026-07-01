@@ -81,3 +81,12 @@ walkthrough and isn't automated.
   remount of `/`, so a reboot is needed to apply them.
 - `inventory/hosts.yml` is gitignored, same pattern as void.install's
   `void.cfg` — only the `.example` file is tracked.
+- The `system` role's very first task adds a precedence rule to
+  `/etc/gai.conf` so IPv4 is preferred over IPv6 for name resolution.
+  This works around a real, reproducible hang: `xbps-install -S` would
+  connect to a mirror over IPv6, then stall forever mid-transfer (visible
+  as a `CLOSE-WAIT` socket that never closes) — consistent with an IPv6
+  MTU black hole somewhere on the path. IPv4 to the same mirrors worked
+  fine. If `xbps-install` ever hangs again after this, check `ps`/`ss` on
+  the target for the same `CLOSE-WAIT` pattern before assuming it's just
+  slow.

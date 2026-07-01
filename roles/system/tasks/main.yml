@@ -1,4 +1,11 @@
 ---
+- name: Prefer IPv4 over IPv6 for name resolution
+  ansible.builtin.lineinfile:
+    path: /etc/gai.conf
+    line: "precedence ::ffff:0:0/96  100"
+    create: true
+    mode: "0644"
+
 - name: Update package index and upgrade xbps itself
   community.general.xbps:
     update_cache: true
