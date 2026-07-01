@@ -3,25 +3,25 @@
 Ansible playbook that finishes configuring a box installed by
 [void.install](https://github.com/stivce/void.install): package updates,
 timezone/keymap, fastest mirror, then everything from `install-guide.md`
-and `gaming.md` beyond what the base installer already does.
+and `gaming.md` beyond what the base installer already does. Runs fully
+unattended — no prompts, every feature below is always applied.
 
 ## What it does
 
-- **`system` role** (non-interactive): syncs the package index and
-  upgrades xbps itself, upgrades all installed packages, ensures the
-  timezone and keymap, benchmarks a list of candidate mirrors and sets
-  the fastest one as the main repository.
-- **`packages_base` role** (interactive): asks `y`/`N` for each
-  install-guide.md feature — DNS fix, NVIDIA driver, multilib, ZSH (+
-  optional Oh My Zsh), Hyprland (+ example config), TTY1 autologin,
-  Neovim/Fastfetch, Zen Browser, NTP, boot-time tweaks — and only applies
-  what you say yes to.
-- **`packages_gaming` role** (interactive): same pattern for
-  gaming.md — GameMode/MangoHud, Steam, ProtonPlus, Prism Launcher,
-  World of Warcraft via umu-launcher + a generated Battle.net launcher
-  script, Discord, and CurseForge (prepares `~/.local/bin`/PATH; the
-  AppImage itself still has to be downloaded manually — there's no
-  stable direct-download URL for it).
+- **`system` role**: syncs the package index and upgrades xbps itself,
+  upgrades all installed packages, ensures the timezone and keymap,
+  benchmarks a list of candidate mirrors and sets the fastest one as the
+  main repository.
+- **`packages_base` role**: everything from install-guide.md's
+  post-install parts — DNS fix, NVIDIA driver, multilib, ZSH + Oh My Zsh,
+  Hyprland + example config, TTY1 autologin, Neovim/Fastfetch, Zen
+  Browser, NTP, boot-time tweaks.
+- **`packages_gaming` role**: everything from gaming.md — GameMode/
+  MangoHud, Steam, ProtonPlus, Prism Launcher, World of Warcraft via
+  umu-launcher + a generated Battle.net launcher script, Discord, and
+  CurseForge (prepares `~/.local/bin`/PATH; the AppImage itself still has
+  to be downloaded manually — there's no stable direct-download URL for
+  it).
 
 Parts 1-14 of `install-guide.md` (partitioning through first boot) and
 Part 16 (mirror selection) are deliberately not repeated here — the first
@@ -66,10 +66,8 @@ walkthrough and isn't automated.
    ansible-playbook site.yml --ask-become-pass
    ```
 
-   You'll be prompted for your sudo password once up front, then for
-   each optional feature as the `packages_base` and `packages_gaming`
-   roles reach their prompts. The `system` role runs first with no
-   prompts at all.
+   You'll be prompted for your sudo password once up front; everything
+   else runs unattended.
 
 ## Notes
 

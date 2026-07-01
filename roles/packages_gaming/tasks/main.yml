@@ -1,36 +1,5 @@
 ---
-- name: Warn if multilib wasn't applied
-  ansible.builtin.debug:
-    msg: >-
-      multilib wasn't approved in the packages_base role run — gaming_utils
-      and wow_umu need it (32-bit libs). They'll likely fail without it.
-  when: "'multilib' not in (packages_base_approved | default([]))"
-
-- name: Ask which gaming.md features to apply
-  ansible.builtin.pause:
-    prompt: "Apply '{{ item.id }}' — {{ item.desc }}? [y/N]"
-  register: packages_gaming_prompts
-  loop: "{{ packages_gaming_features }}"
-  loop_control:
-    label: "{{ item.id }}"
-
-- name: Record approved features
-  ansible.builtin.set_fact:
-    packages_gaming_approved: >-
-      {{
-        packages_gaming_prompts.results
-        | selectattr('user_input', 'defined')
-        | selectattr('user_input', 'match', '(?i)^(y|yes)$')
-        | map(attribute='item.id')
-        | list
-      }}
-
-- name: Show approved features
-  ansible.builtin.debug:
-    msg: "Approved: {{ packages_gaming_approved }}"
-
 - name: "Gaming_utils: GameMode + MangoHud"
-  when: "'gaming_utils' in packages_gaming_approved"
   community.general.xbps:
     name:
       - gamemode
@@ -40,19 +9,16 @@
     state: latest
 
 - name: "Steam: install"
-  when: "'steam' in packages_gaming_approved"
   community.general.xbps:
     name: steam
     state: latest
 
 - name: "Protonplus: install"
-  when: "'protonplus' in packages_gaming_approved"
   community.general.xbps:
     name: protonplus
     state: latest
 
 - name: "Prism_launcher: Minecraft"
-  when: "'prism_launcher' in packages_gaming_approved"
   community.general.xbps:
     name:
       - PrismLauncher
@@ -60,7 +26,6 @@
     state: latest
 
 - name: "Wow_umu: Battle.net via umu-launcher"
-  when: "'wow_umu' in packages_gaming_approved"
   become: true
   become_user: "{{ ansible_user_id }}"
   block:
@@ -115,7 +80,6 @@
         mode: "0755"
 
 - name: "Discord: install via flatpak"
-  when: "'discord' in packages_gaming_approved"
   block:
     - name: Install flatpak
       community.general.xbps:
@@ -135,7 +99,6 @@
         remote: flathub
 
 - name: "Curseforge: prepare PATH (AppImage download is manual)"
-  when: "'curseforge' in packages_gaming_approved"
   block:
     - name: Ensure ~/.local/bin exists
       ansible.builtin.file:

@@ -1,29 +1,5 @@
 ---
-- name: Ask which install-guide.md features to apply
-  ansible.builtin.pause:
-    prompt: "Apply '{{ item.id }}' — {{ item.desc }}? [y/N]"
-  register: packages_base_prompts
-  loop: "{{ packages_base_features }}"
-  loop_control:
-    label: "{{ item.id }}"
-
-- name: Record approved features
-  ansible.builtin.set_fact:
-    packages_base_approved: >-
-      {{
-        packages_base_prompts.results
-        | selectattr('user_input', 'defined')
-        | selectattr('user_input', 'match', '(?i)^(y|yes)$')
-        | map(attribute='item.id')
-        | list
-      }}
-
-- name: Show approved features
-  ansible.builtin.debug:
-    msg: "Approved: {{ packages_base_approved }}"
-
-- name: "dns_fix: pin reliable DNS servers"
-  when: "'dns_fix' in packages_base_approved"
+- name: "Dns_fix: pin reliable DNS servers"
   block:
     - name: Write resolv.conf.head
       ansible.builtin.copy:
@@ -37,8 +13,7 @@
       ansible.builtin.command: sv restart dhcpcd
       changed_when: true
 
-- name: "nvidia: proprietary driver + KMS"
-  when: "'nvidia' in packages_base_approved"
+- name: "Nvidia: proprietary driver + KMS"
   block:
     - name: Enable nonfree repo
       community.general.xbps:
@@ -76,8 +51,7 @@
       ansible.builtin.command: grub-mkconfig -o /boot/grub/grub.cfg
       changed_when: true
 
-- name: "multilib: 32-bit libraries for Steam/Proton"
-  when: "'multilib' in packages_base_approved"
+- name: "Multilib: 32-bit libraries for Steam/Proton"
   block:
     - name: Enable multilib repos
       community.general.xbps:
@@ -92,15 +66,14 @@
 
     - name: Install 32-bit base libraries
       community.general.xbps:
-        name: >-
-          {{
-            ['glibc-32bit', 'libgcc-32bit', 'libstdc++-32bit']
-            + (['nvidia-libs-32bit'] if 'nvidia' in packages_base_approved else [])
-          }}
+        name:
+          - glibc-32bit
+          - libgcc-32bit
+          - libstdc++-32bit
+          - nvidia-libs-32bit
         state: latest
 
-- name: "zsh: shell + completions"
-  when: "'zsh' in packages_base_approved"
+- name: "Zsh: shell + completions"
   block:
     - name: Install zsh and completions
       community.general.xbps:
@@ -119,8 +92,7 @@
         name: root
         shell: /bin/zsh
 
-- name: "oh_my_zsh: framework install"
-  when: "'oh_my_zsh' in packages_base_approved and 'zsh' in packages_base_approved"
+- name: "Oh_my_zsh: framework install"
   become: true
   become_user: "{{ ansible_user_id }}"
   ansible.builtin.shell: >-
@@ -128,8 +100,7 @@
   args:
     creates: "/home/{{ ansible_user_id }}/.oh-my-zsh"
 
-- name: "hyprland: compositor + example config"
-  when: "'hyprland' in packages_base_approved"
+- name: "Hyprland: compositor + example config"
   block:
     - name: Add hyprland-void community repo
       ansible.builtin.copy:
@@ -185,10 +156,9 @@
         mode: "0644"
         force: false
       vars:
-        hyprland_nvidia: "{{ 'nvidia' in packages_base_approved }}"
+        hyprland_nvidia: true
 
-- name: "autologin_hyprland: TTY1 autologin + autostart"
-  when: "'autologin_hyprland' in packages_base_approved and 'hyprland' in packages_base_approved"
+- name: "Autologin_hyprland: TTY1 autologin + autostart"
   block:
     - name: Enable agetty autologin on TTY1
       ansible.builtin.lineinfile:
@@ -207,8 +177,7 @@
               exec start-hyprland
           fi
 
-- name: "neovim_fastfetch: editor + fetch tool"
-  when: "'neovim_fastfetch' in packages_base_approved"
+- name: "Neovim_fastfetch: editor + fetch tool"
   block:
     - name: Install neovim
       community.general.xbps:
@@ -222,8 +191,7 @@
       args:
         creates: "/home/{{ ansible_user_id }}/.config/fastfetch/config.jsonc"
 
-- name: "zen_browser: install via flatpak"
-  when: "'zen_browser' in packages_base_approved"
+- name: "Zen_browser: install via flatpak"
   block:
     - name: Install flatpak
       community.general.xbps:
@@ -242,8 +210,7 @@
         state: present
         remote: flathub
 
-- name: "ntp: chrony time sync"
-  when: "'ntp' in packages_base_approved"
+- name: "Ntp: chrony time sync"
   block:
     - name: Install chrony
       community.general.xbps:
@@ -256,8 +223,7 @@
         dest: /var/service/chronyd
         state: link
 
-- name: "boot_optimization: GRUB timeout, unused TTYs, btrfs mount opts"
-  when: "'boot_optimization' in packages_base_approved"
+- name: "Boot_optimization: GRUB timeout, unused TTYs, btrfs mount opts"
   block:
     - name: Reduce GRUB timeout to 1s
       ansible.builtin.lineinfile:
