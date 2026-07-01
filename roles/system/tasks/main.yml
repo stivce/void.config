@@ -23,11 +23,11 @@
     create: true
     mode: "0644"
 
-- name: Benchmark candidate mirrors  # noqa: command-instead-of-module
-  ansible.builtin.command:
-    cmd: >-
-      curl -o /dev/null -s -m 5 -w '%{time_total}'
-      {{ item }}/current/x86_64-repodata
+- name: Benchmark candidate mirrors
+  ansible.builtin.uri:
+    url: "{{ item }}/current/x86_64-repodata"
+    method: HEAD
+    timeout: 5
   register: system_mirror_timings
   loop: "{{ void_mirror_candidates }}"
   loop_control:
@@ -38,11 +38,11 @@
 - name: Build list of successful mirror timings
   ansible.builtin.set_fact:
     system_mirror_results: >-
-      {{ system_mirror_results | default([]) + [{'mirror': item.item, 'time': item.stdout | float}] }}
+      {{ system_mirror_results | default([]) + [{'mirror': item.item, 'time': item.elapsed}] }}
   loop: "{{ system_mirror_timings.results }}"
   loop_control:
     label: "{{ item.item }}"
-  when: item.rc == 0
+  when: item.elapsed is defined
 
 - name: Fail if no candidate mirror responded
   ansible.builtin.fail:
