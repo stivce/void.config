@@ -81,16 +81,16 @@ walkthrough and isn't automated.
   remount of `/`, so a reboot is needed to apply them.
 - `inventory/hosts.yml` is gitignored, same pattern as void.install's
   `void.cfg` — only the `.example` file is tracked.
-- The `system` role's first tasks work around a real, reproducible hang:
-  `xbps-install -S` would connect to a mirror over IPv6, then stall
-  forever mid-transfer (visible as a `CLOSE-WAIT` socket that never
-  closes) — consistent with an IPv6 MTU black hole somewhere on the
-  path. IPv4 to the same mirrors worked fine. A `/etc/gai.conf`
-  precedence rule was tried first, but `xbps` turned out to ignore
-  glibc's address sorting entirely (confirmed via `getaddrinfo()`
-  returning IPv4 first while `xbps` still connected over IPv6 anyway),
-  so IPv6 is disabled outright via sysctl instead — the only fix that
-  actually stuck. If `xbps-install` ever hangs again after this, check
-  `ps`/`ss` on the target for the same `CLOSE-WAIT` pattern before
-  assuming it's just
-  slow.
+- The mirror-selection tasks in the `system` role deliberately run
+  *before* any other `xbps` operation, and deliberately exclude
+  `repo-default.voidlinux.org`/`repo-fastly.voidlinux.org`. On a real
+  run, `xbps-install -S` against `repo-default` connected fine and then
+  hung forever mid-transfer (a `CLOSE-WAIT` socket that never closes),
+  reproduced twice, while a plain Python `urllib` fetch of the exact same
+  URL succeeded instantly. Pointing `xbps-install` at a direct mirror
+  (`repo-de.voidlinux.org`) instead fixed it immediately. So this isn't
+  a network problem — it's `xbps`'s own (old, HTTP/1.1-only) HTTP client
+  choking on something Fastly's CDN edge does differently from a plain
+  origin server. If `xbps-install` ever hangs again, check `ps`/`ss` on
+  the target for the same `CLOSE-WAIT` pattern, and suspect whichever
+  mirror it's currently pointed at before assuming it's just slow.
