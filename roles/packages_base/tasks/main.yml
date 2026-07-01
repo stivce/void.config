@@ -93,12 +93,21 @@
         shell: /bin/zsh
 
 - name: "Oh_my_zsh: framework install"
-  become: true
-  become_user: "{{ ansible_user }}"
-  ansible.builtin.shell: >-
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-  args:
-    creates: "/home/{{ ansible_user }}/.oh-my-zsh"
+  block:
+    - name: Run the Oh My Zsh installer
+      become: true
+      become_user: "{{ ansible_user }}"
+      ansible.builtin.shell: >-
+        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+      args:
+        creates: "/home/{{ ansible_user }}/.oh-my-zsh"
+
+    - name: Ensure Oh My Zsh files are owned by the ansible user
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.oh-my-zsh"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
 
 - name: "Hyprland: compositor + example config"
   block:
@@ -146,6 +155,7 @@
         path: "/home/{{ ansible_user }}/.config/hypr"
         state: directory
         owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
 
     - name: Install example Hyprland config (won't overwrite an existing one)
@@ -153,6 +163,7 @@
         src: hyprland.conf.j2
         dest: "/home/{{ ansible_user }}/.config/hypr/hyprland.conf"
         owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0644"
         force: false
       vars:
@@ -166,11 +177,27 @@
         regexp: "^GETTY_ARGS="
         line: 'GETTY_ARGS="--noclear --autologin {{ ansible_user }}"'
 
+    - name: Ensure the user's XDG runtime dir exists at boot, before TTY1 autologin
+      ansible.builtin.copy:
+        dest: /etc/runit/core-services/06-user-runtime-dir.sh
+        content: |
+          #!/bin/sh
+          # elogind doesn't reliably create /run/user/$UID in time for the
+          # TTY1 autologin session, causing Hyprland to fail with
+          # "couldn't create /run/user/$UID/hypr/...". Ensure it exists
+          # ourselves during stage 1, before any service (incl. agetty) starts.
+          uid=$(id -u {{ ansible_user }} 2>/dev/null) || exit 0
+          mkdir -p "/run/user/$uid"
+          chown {{ ansible_user }}:{{ ansible_user }} "/run/user/$uid"
+          chmod 700 "/run/user/$uid"
+        mode: "0644"
+
     - name: Autostart Hyprland from .zprofile
       ansible.builtin.blockinfile:
         path: "/home/{{ ansible_user }}/.zprofile"
         create: true
         owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0644"
         block: |
           if [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
@@ -189,6 +216,7 @@
         path: "/home/{{ ansible_user }}/.config/fastfetch"
         state: directory
         owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
 
     - name: Generate fastfetch config for the ansible user
@@ -198,6 +226,12 @@
         fastfetch --gen-config /home/{{ ansible_user }}/.config/fastfetch/config.jsonc
       args:
         creates: "/home/{{ ansible_user }}/.config/fastfetch/config.jsonc"
+
+    - name: Ensure fastfetch config is owned by the ansible user
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.config/fastfetch/config.jsonc"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
 
 - name: "Zen_browser: install via flatpak"
   block:

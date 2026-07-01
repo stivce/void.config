@@ -42,6 +42,8 @@
       ansible.builtin.file:
         path: "/home/{{ ansible_user }}/.local/bin"
         state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
 
     - name: Download umu-launcher zipapp
@@ -60,6 +62,8 @@
       ansible.builtin.copy:
         src: /tmp/umu/umu-run
         dest: "/home/{{ ansible_user }}/.local/bin/umu-run"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
         remote_src: true
 
@@ -68,6 +72,8 @@
         path: "/home/{{ ansible_user }}/{{ item }}"
         line: 'export PATH="$HOME/.local/bin:$PATH"'
         create: true
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0644"
       loop:
         - .zshrc
@@ -77,6 +83,8 @@
       ansible.builtin.template:
         src: battlenet.sh.j2
         dest: "/home/{{ ansible_user }}/.local/bin/battlenet"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
 
 - name: "Discord: install via flatpak"
@@ -105,6 +113,7 @@
         path: "/home/{{ ansible_user }}/.local/bin"
         state: directory
         owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
 
     - name: Ensure ~/.local/bin is on PATH
@@ -113,6 +122,7 @@
         line: 'export PATH="$HOME/.local/bin:$PATH"'
         create: true
         owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0644"
       loop:
         - .zshrc
