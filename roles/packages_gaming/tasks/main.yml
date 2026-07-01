@@ -27,7 +27,7 @@
 
 - name: "Wow_umu: Battle.net via umu-launcher"
   become: true
-  become_user: "{{ ansible_user_id }}"
+  become_user: "{{ ansible_user }}"
   block:
     - name: Install 32-bit libraries (as root)
       become: true
@@ -40,7 +40,7 @@
 
     - name: Ensure ~/.local/bin exists
       ansible.builtin.file:
-        path: "/home/{{ ansible_user_id }}/.local/bin"
+        path: "/home/{{ ansible_user }}/.local/bin"
         state: directory
         mode: "0755"
 
@@ -59,13 +59,13 @@
     - name: Install umu-run
       ansible.builtin.copy:
         src: /tmp/umu/umu-run
-        dest: "/home/{{ ansible_user_id }}/.local/bin/umu-run"
+        dest: "/home/{{ ansible_user }}/.local/bin/umu-run"
         mode: "0755"
         remote_src: true
 
     - name: Ensure ~/.local/bin is on PATH
       ansible.builtin.lineinfile:
-        path: "/home/{{ ansible_user_id }}/{{ item }}"
+        path: "/home/{{ ansible_user }}/{{ item }}"
         line: 'export PATH="$HOME/.local/bin:$PATH"'
         create: true
         mode: "0644"
@@ -76,7 +76,7 @@
     - name: Install the battlenet launcher script
       ansible.builtin.template:
         src: battlenet.sh.j2
-        dest: "/home/{{ ansible_user_id }}/.local/bin/battlenet"
+        dest: "/home/{{ ansible_user }}/.local/bin/battlenet"
         mode: "0755"
 
 - name: "Discord: install via flatpak"
@@ -102,17 +102,17 @@
   block:
     - name: Ensure ~/.local/bin exists
       ansible.builtin.file:
-        path: "/home/{{ ansible_user_id }}/.local/bin"
+        path: "/home/{{ ansible_user }}/.local/bin"
         state: directory
-        owner: "{{ ansible_user_id }}"
+        owner: "{{ ansible_user }}"
         mode: "0755"
 
     - name: Ensure ~/.local/bin is on PATH
       ansible.builtin.lineinfile:
-        path: "/home/{{ ansible_user_id }}/{{ item }}"
+        path: "/home/{{ ansible_user }}/{{ item }}"
         line: 'export PATH="$HOME/.local/bin:$PATH"'
         create: true
-        owner: "{{ ansible_user_id }}"
+        owner: "{{ ansible_user }}"
         mode: "0644"
       loop:
         - .zshrc

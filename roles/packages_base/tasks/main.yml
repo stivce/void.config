@@ -84,7 +84,7 @@
 
     - name: Set zsh as login shell for the ansible user
       ansible.builtin.user:
-        name: "{{ ansible_user_id }}"
+        name: "{{ ansible_user }}"
         shell: /bin/zsh
 
     - name: Set zsh as login shell for root
@@ -94,11 +94,11 @@
 
 - name: "Oh_my_zsh: framework install"
   become: true
-  become_user: "{{ ansible_user_id }}"
+  become_user: "{{ ansible_user }}"
   ansible.builtin.shell: >-
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
   args:
-    creates: "/home/{{ ansible_user_id }}/.oh-my-zsh"
+    creates: "/home/{{ ansible_user }}/.oh-my-zsh"
 
 - name: "Hyprland: compositor + example config"
   block:
@@ -143,16 +143,16 @@
 
     - name: Ensure ~/.config/hypr exists
       ansible.builtin.file:
-        path: "/home/{{ ansible_user_id }}/.config/hypr"
+        path: "/home/{{ ansible_user }}/.config/hypr"
         state: directory
-        owner: "{{ ansible_user_id }}"
+        owner: "{{ ansible_user }}"
         mode: "0755"
 
     - name: Install example Hyprland config (won't overwrite an existing one)
       ansible.builtin.template:
         src: hyprland.conf.j2
-        dest: "/home/{{ ansible_user_id }}/.config/hypr/hyprland.conf"
-        owner: "{{ ansible_user_id }}"
+        dest: "/home/{{ ansible_user }}/.config/hypr/hyprland.conf"
+        owner: "{{ ansible_user }}"
         mode: "0644"
         force: false
       vars:
@@ -164,13 +164,13 @@
       ansible.builtin.lineinfile:
         path: /etc/sv/agetty-tty1/conf
         regexp: "^GETTY_ARGS="
-        line: 'GETTY_ARGS="--noclear --autologin {{ ansible_user_id }}"'
+        line: 'GETTY_ARGS="--noclear --autologin {{ ansible_user }}"'
 
     - name: Autostart Hyprland from .zprofile
       ansible.builtin.blockinfile:
-        path: "/home/{{ ansible_user_id }}/.zprofile"
+        path: "/home/{{ ansible_user }}/.zprofile"
         create: true
-        owner: "{{ ansible_user_id }}"
+        owner: "{{ ansible_user }}"
         mode: "0644"
         block: |
           if [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
@@ -184,12 +184,20 @@
         name: neovim
         state: latest
 
+    - name: Ensure ~/.config/fastfetch exists
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.config/fastfetch"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: "0755"
+
     - name: Generate fastfetch config for the ansible user
       become: true
-      become_user: "{{ ansible_user_id }}"
-      ansible.builtin.command: fastfetch --gen-config
+      become_user: "{{ ansible_user }}"
+      ansible.builtin.command: >-
+        fastfetch --gen-config /home/{{ ansible_user }}/.config/fastfetch/config.jsonc
       args:
-        creates: "/home/{{ ansible_user_id }}/.config/fastfetch/config.jsonc"
+        creates: "/home/{{ ansible_user }}/.config/fastfetch/config.jsonc"
 
 - name: "Zen_browser: install via flatpak"
   block:
