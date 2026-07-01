@@ -1,0 +1,20 @@
+---
+packages_gaming_wow_umu_release_url: "https://github.com/Open-Wine-Components/umu-launcher/releases/download/1.4.0/umu-launcher-1.4.0-zipapp.tar"
+
+# gaming.md features. Requires the multilib feature from packages_base to
+# have been applied at some point (same as the guide itself states).
+packages_gaming_features:
+  - id: gaming_utils
+    desc: "GameMode + MangoHud (perf optimizations + in-game overlay) — needs multilib"
+  - id: steam
+    desc: "Steam"
+  - id: protonplus
+    desc: "ProtonPlus (manage GE-Proton builds for Steam)"
+  - id: prism_launcher
+    desc: "Prism Launcher + OpenJDK 21 (Minecraft)"
+  - id: wow_umu
+    desc: "World of Warcraft via umu-launcher + Battle.net launcher script — needs multilib"
+  - id: discord
+    desc: "Discord via Flatpak"
+  - id: curseforge
+    desc: "CurseForge (prepares ~/.local/bin + PATH; you still download the AppImage manually)"

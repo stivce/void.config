@@ -1,0 +1,7 @@
+# Copy to inventory/hosts.yml and fill in your own host.
+# inventory/hosts.yml is gitignored so real IPs/hostnames don't get committed.
+all:
+  hosts:
+    voidbox:
+      ansible_host: 192.168.1.50
+      ansible_user: alice

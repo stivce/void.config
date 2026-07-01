@@ -1,0 +1,163 @@
+---
+- name: Warn if multilib wasn't applied
+  ansible.builtin.debug:
+    msg: >-
+      multilib wasn't approved in the packages_base role run — gaming_utils
+      and wow_umu need it (32-bit libs). They'll likely fail without it.
+  when: "'multilib' not in (packages_base_approved | default([]))"
+
+- name: Ask which gaming.md features to apply
+  ansible.builtin.pause:
+    prompt: "Apply '{{ item.id }}' — {{ item.desc }}? [y/N]"
+  register: packages_gaming_prompts
+  loop: "{{ packages_gaming_features }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Record approved features
+  ansible.builtin.set_fact:
+    packages_gaming_approved: >-
+      {{
+        packages_gaming_prompts.results
+        | selectattr('user_input', 'defined')
+        | selectattr('user_input', 'match', '(?i)^(y|yes)$')
+        | map(attribute='item.id')
+        | list
+      }}
+
+- name: Show approved features
+  ansible.builtin.debug:
+    msg: "Approved: {{ packages_gaming_approved }}"
+
+- name: "Gaming_utils: GameMode + MangoHud"
+  when: "'gaming_utils' in packages_gaming_approved"
+  community.general.xbps:
+    name:
+      - gamemode
+      - libgamemode-32bit
+      - MangoHud
+      - MangoHud-32bit
+    state: latest
+
+- name: "Steam: install"
+  when: "'steam' in packages_gaming_approved"
+  community.general.xbps:
+    name: steam
+    state: latest
+
+- name: "Protonplus: install"
+  when: "'protonplus' in packages_gaming_approved"
+  community.general.xbps:
+    name: protonplus
+    state: latest
+
+- name: "Prism_launcher: Minecraft"
+  when: "'prism_launcher' in packages_gaming_approved"
+  community.general.xbps:
+    name:
+      - PrismLauncher
+      - openjdk21
+    state: latest
+
+- name: "Wow_umu: Battle.net via umu-launcher"
+  when: "'wow_umu' in packages_gaming_approved"
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  block:
+    - name: Install 32-bit libraries (as root)
+      become: true
+      become_user: root
+      community.general.xbps:
+        name:
+          - glibc-32bit
+          - libgcc-32bit
+        state: latest
+
+    - name: Ensure ~/.local/bin exists
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user_id }}/.local/bin"
+        state: directory
+        mode: "0755"
+
+    - name: Download umu-launcher zipapp
+      ansible.builtin.get_url:
+        url: "{{ packages_gaming_wow_umu_release_url }}"
+        dest: /tmp/umu.tar
+        mode: "0644"
+
+    - name: Extract umu-launcher zipapp
+      ansible.builtin.unarchive:
+        src: /tmp/umu.tar
+        dest: /tmp/
+        remote_src: true
+
+    - name: Install umu-run
+      ansible.builtin.copy:
+        src: /tmp/umu/umu-run
+        dest: "/home/{{ ansible_user_id }}/.local/bin/umu-run"
+        mode: "0755"
+        remote_src: true
+
+    - name: Ensure ~/.local/bin is on PATH
+      ansible.builtin.lineinfile:
+        path: "/home/{{ ansible_user_id }}/{{ item }}"
+        line: 'export PATH="$HOME/.local/bin:$PATH"'
+        create: true
+        mode: "0644"
+      loop:
+        - .zshrc
+        - .profile
+
+    - name: Install the battlenet launcher script
+      ansible.builtin.template:
+        src: battlenet.sh.j2
+        dest: "/home/{{ ansible_user_id }}/.local/bin/battlenet"
+        mode: "0755"
+
+- name: "Discord: install via flatpak"
+  when: "'discord' in packages_gaming_approved"
+  block:
+    - name: Install flatpak
+      community.general.xbps:
+        name: flatpak
+        state: present
+
+    - name: Add flathub remote
+      community.general.flatpak_remote:
+        name: flathub
+        state: present
+        flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo
+
+    - name: Install Discord
+      community.general.flatpak:
+        name: com.discordapp.Discord
+        state: present
+        remote: flathub
+
+- name: "Curseforge: prepare PATH (AppImage download is manual)"
+  when: "'curseforge' in packages_gaming_approved"
+  block:
+    - name: Ensure ~/.local/bin exists
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user_id }}/.local/bin"
+        state: directory
+        owner: "{{ ansible_user_id }}"
+        mode: "0755"
+
+    - name: Ensure ~/.local/bin is on PATH
+      ansible.builtin.lineinfile:
+        path: "/home/{{ ansible_user_id }}/{{ item }}"
+        line: 'export PATH="$HOME/.local/bin:$PATH"'
+        create: true
+        owner: "{{ ansible_user_id }}"
+        mode: "0644"
+      loop:
+        - .zshrc
+        - .profile
+
+    - name: Reminder to download the AppImage manually
+      ansible.builtin.debug:
+        msg: >-
+          There's no stable direct-download URL for CurseForge — download the
+          AppImage from curseforge.com yourself, then: chmod +x it and move
+          it to ~/.local/bin/curseforge.AppImage (see gaming.md Part 6).

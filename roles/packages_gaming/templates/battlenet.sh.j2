@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PREFIX="$HOME/Games/battlenet"
+GAMEID="umu-battlenet"
+INSTALL_PATH="$PREFIX/drive_c/Program Files (x86)/Battle.net/Battle.net.exe"
+SETUP_URL="https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe"
+SETUP_FILE="/tmp/Battle.net-Setup.exe"
+
+if ! command -v umu-run &>/dev/null; then
+    echo "==> Installing umu-launcher..."
+    curl -fL '{{ packages_gaming_wow_umu_release_url }}' -o /tmp/umu.tar
+    tar -xf /tmp/umu.tar -C /tmp/
+    mkdir -p ~/.local/bin
+    cp /tmp/umu/umu-run ~/.local/bin/umu-run
+    chmod +x ~/.local/bin/umu-run
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+
+for pkg in curl glibc-32bit libgcc-32bit; do
+    xbps-query "$pkg" &>/dev/null || sudo xbps-install -Sy "$pkg"
+done
+
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+
+if [[ ! -f "$INSTALL_PATH" ]]; then
+    echo "==> Installing Battle.net..."
+    curl -fLo "$SETUP_FILE" "$SETUP_URL"
+    env WINEPREFIX="$PREFIX" GAMEID="$GAMEID" umu-run "$SETUP_FILE"
+    rm -f "$SETUP_FILE"
+fi
+
+pkill -f 'Agent.exe|Battle.net.exe' 2>/dev/null || true
+exec env WINEPREFIX="$PREFIX" GAMEID="$GAMEID" umu-run "$INSTALL_PATH" "$@"

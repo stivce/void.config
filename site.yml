@@ -1,0 +1,8 @@
+---
+- name: Configure a void.install box
+  hosts: all
+  gather_facts: true
+  roles:
+    - system
+    - packages_base
+    - packages_gaming

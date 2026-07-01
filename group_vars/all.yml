@@ -1,0 +1,20 @@
+---
+# System settings this playbook ensures. Match these to void.cfg from the
+# void.install repo if you want the two to stay in sync.
+void_timezone: Europe/Vienna
+void_keymap: us
+
+# Candidate mirrors to benchmark for "fastest mirror" selection. Sourced
+# from https://xmirror.voidlinux.org (Tier 1 mirrors + European mirrors,
+# since the reference machine is in Vienna). Trim/extend as you like -
+# whichever responds fastest wins.
+void_mirror_candidates:
+  - https://repo-default.voidlinux.org
+  - https://repo-fastly.voidlinux.org
+  - https://repo-de.voidlinux.org
+  - https://repo-fi.voidlinux.org
+  - https://mirror.puzzle.ch/voidlinux
+  - https://voidlinux.mirror.garr.it
+  - https://mirrors.dotsrc.org/voidlinux
+  - https://ftp.lysator.liu.se/pub/voidlinux
+  - https://mirror.accum.se/mirror/voidlinux
