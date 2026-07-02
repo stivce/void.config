@@ -1,0 +1,8 @@
+---
+- name: Regenerate GRUB config
+  ansible.builtin.command: grub-mkconfig -o /boot/grub/grub.cfg
+  changed_when: true
+
+- name: Restart dhcpcd
+  ansible.builtin.command: sv restart dhcpcd
+  changed_when: true

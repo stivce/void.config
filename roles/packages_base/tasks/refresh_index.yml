@@ -1,0 +1,34 @@
+---
+# Hang-resistant index refresh — same libfetch-hang protection as the
+# system role's xbps_sync.yml (see the explanation there): timeout, kill
+# the hung process, retry once, fail clearly.
+- name: Refresh package index, bounded by a timeout
+  block:
+    - name: Refresh package index
+      community.general.xbps:
+        update_cache: true
+      timeout: 120
+  rescue:
+    - name: Kill hung xbps-install
+      ansible.builtin.command: pkill -x xbps-install
+      changed_when: true
+      failed_when: false
+
+    - name: Retry once
+      block:
+        - name: Refresh package index (retry)
+          community.general.xbps:
+            update_cache: true
+          timeout: 120
+      rescue:
+        - name: Kill hung xbps-install again
+          ansible.builtin.command: pkill -x xbps-install
+          changed_when: true
+          failed_when: false
+
+        - name: Give up with a clear message
+          ansible.builtin.fail:
+            msg: >-
+              xbps index refresh hung twice — the libfetch keep-alive hang
+              (see README). Re-run the playbook; if it persists, try a
+              different mirror in group_vars/all.yml.

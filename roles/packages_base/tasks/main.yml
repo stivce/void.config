@@ -8,21 +8,17 @@
           nameserver 1.1.1.1
           nameserver 8.8.8.8
         mode: "0644"
-
-    - name: Restart dhcpcd to apply
-      ansible.builtin.command: sv restart dhcpcd
-      changed_when: true
+      notify: Restart dhcpcd
 
 - name: "Nvidia: proprietary driver + KMS"
   block:
     - name: Enable nonfree repo
       community.general.xbps:
         name: void-repo-nonfree
-        state: present
+        state: latest
 
     - name: Refresh package index for the new repo
-      community.general.xbps:
-        update_cache: true
+      ansible.builtin.include_tasks: refresh_index.yml
 
     - name: Install NVIDIA driver packages
       community.general.xbps:
@@ -34,8 +30,12 @@
     - name: Enable NVIDIA DRM kernel mode setting in GRUB cmdline
       ansible.builtin.lineinfile:
         path: /etc/default/grub
-        regexp: "^GRUB_CMDLINE_LINUX_DEFAULT="
-        line: 'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=4 nvidia_drm.modeset=1"'
+        backrefs: true
+        # Append the flag to whatever is already on the cmdline instead of
+        # overwriting it; the lookahead makes this a no-op once present.
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?!.*nvidia_drm\.modeset=1)[^"]*)"'
+        line: '\1 nvidia_drm.modeset=1"'
+      notify: Regenerate GRUB config
 
     - name: Load NVIDIA kernel modules at boot
       ansible.builtin.copy:
@@ -47,10 +47,6 @@
           nvidia_drm
         mode: "0644"
 
-    - name: Regenerate GRUB config
-      ansible.builtin.command: grub-mkconfig -o /boot/grub/grub.cfg
-      changed_when: true
-
 - name: "Multilib: 32-bit libraries for Steam/Proton"
   block:
     - name: Enable multilib repos
@@ -58,11 +54,10 @@
         name:
           - void-repo-multilib
           - void-repo-multilib-nonfree
-        state: present
+        state: latest
 
     - name: Refresh package index for the new repos
-      community.general.xbps:
-        update_cache: true
+      ansible.builtin.include_tasks: refresh_index.yml
 
     - name: Install 32-bit base libraries
       community.general.xbps:
@@ -92,22 +87,26 @@
         name: root
         shell: /bin/zsh
 
-- name: "Oh_my_zsh: framework install"
+- name: "Zsh_config: minimal managed config, no framework"
   block:
-    - name: Run the Oh My Zsh installer
-      become: true
-      become_user: "{{ ansible_user }}"
-      ansible.builtin.shell: >-
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-      args:
-        creates: "/home/{{ ansible_user }}/.oh-my-zsh"
-
-    - name: Ensure Oh My Zsh files are owned by the ansible user
+    - name: Remove Oh My Zsh (replaced by a plain zsh config)
       ansible.builtin.file:
         path: "/home/{{ ansible_user }}/.oh-my-zsh"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        recurse: true
+        state: absent
+
+    # Fully managed: the old OMZ-generated .zshrc would break once
+    # ~/.oh-my-zsh is gone. Personal tweaks belong in ~/.zshrc.local,
+    # which the managed file sources last.
+    - name: Install minimal .zshrc for the user and root
+      ansible.builtin.copy:
+        src: zshrc
+        dest: "{{ item.home }}/.zshrc"
+        owner: "{{ item.owner }}"
+        group: "{{ item.owner }}"
+        mode: "0644"
+      loop:
+        - { home: "/home/{{ ansible_user }}", owner: "{{ ansible_user }}" }
+        - { home: /root, owner: root }
 
 - name: "Hyprland: compositor + example config"
   block:
@@ -118,8 +117,7 @@
         mode: "0644"
 
     - name: Refresh package index for the new repo
-      community.general.xbps:
-        update_cache: true
+      ansible.builtin.include_tasks: refresh_index.yml
 
     - name: Install Hyprland and dependencies
       community.general.xbps:
@@ -141,14 +139,20 @@
           - mesa-dri
         state: latest
 
-    - name: Enable seat management services
+    - name: Enable dbus service
       ansible.builtin.file:
-        src: "/etc/sv/{{ item }}"
-        dest: "/var/service/{{ item }}"
+        src: /etc/sv/dbus
+        dest: /var/service/dbus
         state: link
-      loop:
-        - elogind
-        - dbus
+
+    - name: Disable the elogind runit service (elogind is D-Bus activated)
+      ansible.builtin.file:
+        path: /var/service/elogind
+        state: absent
+      # pam_elogind activates elogind via D-Bus on the first login. With the
+      # runit service also enabled, whichever copy starts second exits with
+      # "elogind is already running" and runit restarts it every second,
+      # spamming the TTY. Only D-Bus may start elogind.
 
     - name: Ensure ~/.config/hypr exists
       ansible.builtin.file:
@@ -177,6 +181,21 @@
         regexp: "^GETTY_ARGS="
         line: 'GETTY_ARGS="--noclear --autologin {{ ansible_user }}"'
 
+    - name: Delay TTY1 autologin until the D-Bus system bus is up
+      ansible.builtin.blockinfile:
+        path: /etc/sv/agetty-tty1/conf
+        marker: "# {mark} ANSIBLE MANAGED: wait for dbus"
+        block: |
+          # This conf file is sourced by the agetty-tty1 run script, so it can
+          # hold the ordering hack runit lacks: without dbus up, pam_elogind
+          # can't register the autologin session (elogind is D-Bus activated)
+          # and Hyprland gets no seat on the first attempt.
+          _n=0
+          while [ ! -S /run/dbus/system_bus_socket ] && [ "$_n" -lt 50 ]; do
+              sleep 0.1
+              _n=$((_n + 1))
+          done
+
     - name: Ensure the user's XDG runtime dir exists at boot, before TTY1 autologin
       ansible.builtin.copy:
         dest: /etc/runit/core-services/06-user-runtime-dir.sh
@@ -200,7 +219,10 @@
         group: "{{ ansible_user }}"
         mode: "0644"
         block: |
-          if [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
+          # command -v guard: exec on a missing binary would kill the login
+          # shell and put agetty's autologin into a tight respawn loop.
+          if [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" = "1" ] \
+             && command -v start-hyprland >/dev/null 2>&1; then
               exec start-hyprland
           fi
 
@@ -233,31 +255,19 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
+# flatpak + flathub remote themselves come from the shared flathub role.
 - name: "Zen_browser: install via flatpak"
-  block:
-    - name: Install flatpak
-      community.general.xbps:
-        name: flatpak
-        state: present
-
-    - name: Add flathub remote
-      community.general.flatpak_remote:
-        name: flathub
-        state: present
-        flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo
-
-    - name: Install Zen Browser
-      community.general.flatpak:
-        name: app.zen_browser.zen
-        state: present
-        remote: flathub
+  community.general.flatpak:
+    name: app.zen_browser.zen
+    state: latest
+    remote: flathub
 
 - name: "Ntp: chrony time sync"
   block:
     - name: Install chrony
       community.general.xbps:
         name: chrony
-        state: present
+        state: latest
 
     - name: Enable chronyd service
       ansible.builtin.file:
@@ -272,10 +282,7 @@
         path: /etc/default/grub
         regexp: "^GRUB_TIMEOUT="
         line: "GRUB_TIMEOUT=1"
-
-    - name: Regenerate GRUB config
-      ansible.builtin.command: grub-mkconfig -o /boot/grub/grub.cfg
-      changed_when: true
+      notify: Regenerate GRUB config
 
     - name: Remove unused agetty TTYs (4-6)
       ansible.builtin.file:
@@ -283,13 +290,41 @@
         state: absent
       loop: [4, 5, 6]
 
-    - name: Ensure btrfs performance mount options for root are in fstab  # noqa: syntax-check[unknown-module]
+    - name: Look up the existing fstab entry for /
+      ansible.builtin.command: awk '$1 !~ /^#/ && $2 == "/" { print; exit }' /etc/fstab
+      register: packages_base_fstab_root_raw
+      changed_when: false
+
+    - name: Parse the fstab entry into fields
+      ansible.builtin.set_fact:
+        packages_base_fstab_root: "{{ packages_base_fstab_root_raw.stdout.split() }}"
+
+    # Merge, don't replace: the mount module rewrites the options field
+    # verbatim, and dropping an existing subvol=... would boot into the
+    # wrong subvolume. Keep what's there and append missing perf flags.
+    # jinja[invalid] is a lint false positive: it renders the opts template
+    # with mock scalars, but at runtime both operands are lists (verified
+    # against a real fstab line).
+    - name: Ensure btrfs performance mount options for root are in fstab  # noqa: syntax-check[unknown-module] jinja[invalid]
       ansible.posix.mount:
         path: /
-        src: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='device') | first }}"
+        src: "{{ packages_base_fstab_root[0] }}"
         fstype: btrfs
-        opts: ssd,discard=async,space_cache=v2,compress=zstd:3
-        state: present
+        opts: >-
+          {{ (packages_base_root_opts
+              + (packages_base_perf_opts | reject('in', packages_base_root_opts) | list))
+             | join(',') }}
+        state: latest
+      vars:
+        packages_base_root_opts: "{{ packages_base_fstab_root[3].split(',') }}"
+        packages_base_perf_opts:
+          - ssd
+          - discard=async
+          - space_cache=v2
+          - compress=zstd:3
+      when:
+        - packages_base_fstab_root | length >= 4
+        - packages_base_fstab_root[2] == 'btrfs'
 
     - name: Note that a reboot is needed to apply the new mount options
       ansible.builtin.debug:

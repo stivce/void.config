@@ -1,0 +1,21 @@
+# Managed by void.config — this file is overwritten on every playbook run.
+# Put personal tweaks in ~/.zshrc.local instead; it is sourced at the end.
+
+autoload -Uz compinit && compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt inc_append_history share_history hist_ignore_dups hist_ignore_space
+
+bindkey -e
+
+autoload -Uz colors && colors
+PROMPT='%F{cyan}%n@%m%f %F{blue}%~%f %(?.%F{green}.%F{red})❯%f '
+
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+
+[ -f ~/.zshrc.local ] && source ~/.zshrc.local

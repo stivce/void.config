@@ -18,7 +18,11 @@
   loop: "{{ system_mirror_timings.results }}"
   loop_control:
     label: "{{ item.item }}"
-  when: item.elapsed is defined
+  # uri reports `elapsed` on failures too, and a refused connection fails
+  # near-instantly — require an actual HTTP 200 or a dead mirror "wins".
+  when:
+    - item.status | default(-1) == 200
+    - item.elapsed is defined
 
 - name: Fail if no candidate mirror responded
   ansible.builtin.fail:
@@ -41,14 +45,33 @@
     content: "repository={{ system_fastest_mirror }}/current\n"
     mode: "0644"
 
+# Without these overrides the nonfree/multilib repos keep using the
+# /usr/share/xbps.d defaults, which point at repo-default.voidlinux.org
+# (a CNAME to the repo-fi origin) — the fastest-mirror choice never
+# applied to them. Same filenames as the defaults so they take precedence.
+- name: Point sub-repositories at the fastest mirror too
+  ansible.builtin.copy:
+    dest: "/etc/xbps.d/10-repository-{{ item.name }}.conf"
+    content: "repository={{ system_fastest_mirror }}/current/{{ item.path }}\n"
+    mode: "0644"
+  loop:
+    - { name: nonfree, path: nonfree }
+    - { name: multilib, path: multilib }
+    - { name: multilib-nonfree, path: multilib/nonfree }
+
 - name: Update package index and upgrade xbps itself
-  community.general.xbps:
-    update_cache: true
-    upgrade_xbps: true
+  ansible.builtin.include_tasks: xbps_sync.yml
+  vars:
+    system_xbps_sync_upgrade_xbps: true
+    system_xbps_sync_timeout: 300
 
 - name: Upgrade all installed packages
-  community.general.xbps:
-    upgrade: true
+  ansible.builtin.include_tasks: xbps_sync.yml
+  vars:
+    system_xbps_sync_upgrade: true
+    # Generous: a full upgrade legitimately downloads a lot. A hang now
+    # costs 30 minutes instead of forever.
+    system_xbps_sync_timeout: 1800
 
 - name: Ensure timezone
   ansible.builtin.file:

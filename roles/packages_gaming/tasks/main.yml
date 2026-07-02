@@ -25,6 +25,28 @@
       - openjdk21
     state: latest
 
+- name: "Local_bin: ~/.local/bin for user-installed launchers"
+  block:
+    - name: Ensure ~/.local/bin exists
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.local/bin"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    # .zshenv is read by every zsh — before .zprofile — so the PATH is
+    # already exported when .zprofile execs start-hyprland and is inherited
+    # by everything launched inside the Hyprland session (wofi, etc.).
+    - name: Ensure ~/.local/bin is on PATH
+      ansible.builtin.lineinfile:
+        path: "/home/{{ ansible_user }}/.zshenv"
+        line: 'export PATH="$HOME/.local/bin:$PATH"'
+        create: true
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
 - name: "Wow_umu: Battle.net via umu-launcher"
   become: true
   become_user: "{{ ansible_user }}"
@@ -38,23 +60,31 @@
           - libgcc-32bit
         state: latest
 
-    - name: Ensure ~/.local/bin exists
-      ansible.builtin.file:
-        path: "/home/{{ ansible_user }}/.local/bin"
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
+    - name: Look up the latest umu-launcher release
+      ansible.builtin.uri:
+        url: "{{ packages_gaming_umu_latest_api_url }}"
+        return_content: true
+      register: packages_gaming_umu_release
 
-    - name: Download umu-launcher zipapp
+    - name: Resolve the zipapp asset URL
+      ansible.builtin.set_fact:
+        packages_gaming_umu_url: >-
+          {{ packages_gaming_umu_release.json.assets
+             | selectattr('name', 'search', 'zipapp')
+             | map(attribute='browser_download_url')
+             | first }}
+
+    # The versioned filename doubles as the idempotence check: a new
+    # release means a new name, so only then is anything re-downloaded.
+    - name: Download the latest umu-launcher zipapp
       ansible.builtin.get_url:
-        url: "{{ packages_gaming_wow_umu_release_url }}"
-        dest: /tmp/umu.tar
+        url: "{{ packages_gaming_umu_url }}"
+        dest: "/tmp/{{ packages_gaming_umu_url | basename }}"
         mode: "0644"
 
     - name: Extract umu-launcher zipapp
       ansible.builtin.unarchive:
-        src: /tmp/umu.tar
+        src: "/tmp/{{ packages_gaming_umu_url | basename }}"
         dest: /tmp/
         remote_src: true
 
@@ -67,18 +97,6 @@
         mode: "0755"
         remote_src: true
 
-    - name: Ensure ~/.local/bin is on PATH
-      ansible.builtin.lineinfile:
-        path: "/home/{{ ansible_user }}/{{ item }}"
-        line: 'export PATH="$HOME/.local/bin:$PATH"'
-        create: true
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0644"
-      loop:
-        - .zshrc
-        - .profile
-
     - name: Install the battlenet launcher script
       ansible.builtin.template:
         src: battlenet.sh.j2
@@ -87,50 +105,17 @@
         group: "{{ ansible_user }}"
         mode: "0755"
 
+# flatpak + flathub remote themselves come from the shared flathub role.
 - name: "Discord: install via flatpak"
-  block:
-    - name: Install flatpak
-      community.general.xbps:
-        name: flatpak
-        state: present
+  community.general.flatpak:
+    name: com.discordapp.Discord
+    state: latest
+    remote: flathub
 
-    - name: Add flathub remote
-      community.general.flatpak_remote:
-        name: flathub
-        state: present
-        flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo
-
-    - name: Install Discord
-      community.general.flatpak:
-        name: com.discordapp.Discord
-        state: present
-        remote: flathub
-
-- name: "Curseforge: prepare PATH (AppImage download is manual)"
-  block:
-    - name: Ensure ~/.local/bin exists
-      ansible.builtin.file:
-        path: "/home/{{ ansible_user }}/.local/bin"
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
-
-    - name: Ensure ~/.local/bin is on PATH
-      ansible.builtin.lineinfile:
-        path: "/home/{{ ansible_user }}/{{ item }}"
-        line: 'export PATH="$HOME/.local/bin:$PATH"'
-        create: true
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0644"
-      loop:
-        - .zshrc
-        - .profile
-
-    - name: Reminder to download the AppImage manually
-      ansible.builtin.debug:
-        msg: >-
-          There's no stable direct-download URL for CurseForge — download the
-          AppImage from curseforge.com yourself, then: chmod +x it and move
-          it to ~/.local/bin/curseforge.AppImage (see gaming.md Part 6).
+# ~/.local/bin dir + PATH are handled by the Local_bin tasks above.
+- name: "Curseforge: reminder (AppImage download is manual)"
+  ansible.builtin.debug:
+    msg: >-
+      There's no stable direct-download URL for CurseForge — download the
+      AppImage from curseforge.com yourself, then: chmod +x it and move
+      it to ~/.local/bin/curseforge.AppImage (see gaming.md Part 6).

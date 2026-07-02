@@ -11,11 +11,16 @@ unattended — no prompts, every feature below is always applied.
 - **`system` role**: syncs the package index and upgrades xbps itself,
   upgrades all installed packages, ensures the timezone and keymap,
   benchmarks a list of candidate mirrors and sets the fastest one as the
-  main repository.
+  main repository. Nothing in this project pins versions: every run
+  installs/upgrades to the newest available release of everything
+  (including umu-launcher, resolved from its latest GitHub release).
+- **`flathub` role**: flatpak + the flathub remote, shared by the two
+  package roles below.
 - **`packages_base` role**: everything from install-guide.md's
-  post-install parts — DNS fix, NVIDIA driver, multilib, ZSH + Oh My Zsh,
-  Hyprland + example config, TTY1 autologin, Neovim/Fastfetch, Zen
-  Browser, NTP, boot-time tweaks.
+  post-install parts — DNS fix, NVIDIA driver, multilib, zsh with a
+  minimal managed config (no framework; personal tweaks go in
+  `~/.zshrc.local`), Hyprland + example config, TTY1 autologin,
+  Neovim/Fastfetch, Zen Browser, NTP, boot-time tweaks.
 - **`packages_gaming` role**: everything from gaming.md — GameMode/
   MangoHud, Steam, ProtonPlus, Prism Launcher, World of Warcraft via
   umu-launcher + a generated Battle.net launcher script, Discord, and
@@ -81,16 +86,19 @@ walkthrough and isn't automated.
   remount of `/`, so a reboot is needed to apply them.
 - `inventory/hosts.yml` is gitignored, same pattern as void.install's
   `void.cfg` — only the `.example` file is tracked.
-- The mirror-selection tasks in the `system` role deliberately run
-  *before* any other `xbps` operation, and deliberately exclude
-  `repo-default.voidlinux.org`/`repo-fastly.voidlinux.org`. On a real
-  run, `xbps-install -S` against `repo-default` connected fine and then
-  hung forever mid-transfer (a `CLOSE-WAIT` socket that never closes),
-  reproduced twice, while a plain Python `urllib` fetch of the exact same
-  URL succeeded instantly. Pointing `xbps-install` at a direct mirror
-  (`repo-de.voidlinux.org`) instead fixed it immediately. So this isn't
-  a network problem — it's `xbps`'s own (old, HTTP/1.1-only) HTTP client
-  choking on something Fastly's CDN edge does differently from a plain
-  origin server. If `xbps-install` ever hangs again, check `ps`/`ss` on
-  the target for the same `CLOSE-WAIT` pattern, and suspect whichever
-  mirror it's currently pointed at before assuming it's just slow.
+- **The xbps hang, properly diagnosed** (2026-07-02): `xbps-install -S`
+  can wedge forever mid-sync with `CLOSE-WAIT` sockets — the server
+  closed the connection, unread bytes sit in the receive queue, and
+  xbps's bundled libfetch blocks in a read with no timeout. Earlier
+  theories are wrong: it is *not* IPv6 (a plain Python client fetched
+  the same repodata over IPv6 from the same box in 0.2s while xbps hung)
+  and *not* Fastly (it was observed live hanging against
+  `repo-de.voidlinux.org`, a direct mirror, and `repo-default` is just a
+  CNAME to the `repo-fi` origin — not a CDN edge). xbps 0.60.7 has no
+  timeout setting, so the playbook defends itself instead: every
+  index-refresh/upgrade goes through a timeout-kill-retry wrapper
+  (`roles/system/tasks/xbps_sync.yml`,
+  `roles/packages_base/tasks/refresh_index.yml`). The `system` role also
+  points the nonfree/multilib sub-repositories at the chosen fastest
+  mirror — by default those silently kept using `repo-default` because
+  only the main repo conf was overridden.

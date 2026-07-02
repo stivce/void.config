@@ -4,5 +4,6 @@
   gather_facts: true
   roles:
     - system
+    - flathub
     - packages_base
     - packages_gaming

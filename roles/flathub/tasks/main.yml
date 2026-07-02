@@ -1,0 +1,13 @@
+---
+# Shared by packages_base (Zen) and packages_gaming (Discord): install
+# flatpak and register the flathub remote exactly once.
+- name: Install flatpak
+  community.general.xbps:
+    name: flatpak
+    state: latest
+
+- name: Add flathub remote
+  community.general.flatpak_remote:
+    name: flathub
+    state: present
+    flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo

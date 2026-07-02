@@ -1,0 +1,47 @@
+---
+# Hang-resistant xbps sync. xbps's bundled libfetch can block forever
+# reading a connection the server has already closed (observed live on
+# 2026-07-02: xbps-install -S wedged with CLOSE-WAIT sockets to two
+# different direct mirrors while a plain HTTP client fetched the same
+# repodata in 0.2s — over IPv6 too, so neither IPv6 nor Fastly is the
+# culprit). xbps 0.60.7 has no timeout knob, so: bound the task with a
+# timeout, kill the hung process, retry once, then fail clearly.
+#
+# Include with:
+#   system_xbps_sync_upgrade_xbps: also upgrade xbps itself (default false)
+#   system_xbps_sync_upgrade:      also upgrade all packages (default false)
+#   system_xbps_sync_timeout:      seconds per attempt (default 120)
+- name: Sync xbps, bounded by a timeout
+  block:
+    - name: Refresh package index (and requested upgrades)
+      community.general.xbps:
+        update_cache: true
+        upgrade_xbps: "{{ system_xbps_sync_upgrade_xbps | default(false) }}"
+        upgrade: "{{ system_xbps_sync_upgrade | default(false) }}"
+      timeout: "{{ system_xbps_sync_timeout | default(120) | int }}"
+  rescue:
+    - name: Kill hung xbps-install
+      ansible.builtin.command: pkill -x xbps-install
+      changed_when: true
+      failed_when: false
+
+    - name: Retry once
+      block:
+        - name: Refresh package index (retry)
+          community.general.xbps:
+            update_cache: true
+            upgrade_xbps: "{{ system_xbps_sync_upgrade_xbps | default(false) }}"
+            upgrade: "{{ system_xbps_sync_upgrade | default(false) }}"
+          timeout: "{{ system_xbps_sync_timeout | default(120) | int }}"
+      rescue:
+        - name: Kill hung xbps-install again
+          ansible.builtin.command: pkill -x xbps-install
+          changed_when: true
+          failed_when: false
+
+        - name: Give up with a clear message
+          ansible.builtin.fail:
+            msg: >-
+              xbps sync hung twice — the libfetch keep-alive hang (see
+              README). Re-run the playbook; if it persists, try a different
+              mirror in group_vars/all.yml.

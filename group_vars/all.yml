@@ -9,14 +9,12 @@ void_keymap: us
 # since the reference machine is in Vienna). Trim/extend as you like -
 # whichever responds fastest wins.
 #
-# Deliberately excludes repo-default.voidlinux.org and
-# repo-fastly.voidlinux.org: both are Fastly-CDN-fronted aliases rather
-# than fixed origin servers, and repo-default was confirmed (on a real
-# run) to make xbps-install hang forever mid-transfer while every other
-# HTTP client fetched the same file instantly - most likely xbps's old
-# HTTP/1.1-only client choking on something Fastly's edge does
-# differently (HTTP/2 response framing or an edge-level redirect).
-# Direct/fixed mirrors don't have this problem.
+# Excludes the aliases repo-default.voidlinux.org (a CNAME to the
+# repo-fi origin, already listed below) and repo-fastly.voidlinux.org
+# (CDN-fronted, not a fixed origin). Note the xbps hang documented in
+# the README is NOT mirror-specific — it's a libfetch bug in xbps
+# itself and has been observed against direct mirrors too; the playbook
+# handles it with timeout-and-retry wrappers rather than mirror choice.
 void_mirror_candidates:
   - https://repo-de.voidlinux.org
   - https://repo-fi.voidlinux.org
