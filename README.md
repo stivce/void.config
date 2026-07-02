@@ -18,15 +18,40 @@ unattended — no prompts, every feature below is always applied.
   package roles below.
 - **`packages_base` role**: everything from install-guide.md's
   post-install parts — DNS fix, NVIDIA driver, multilib, zsh with a
-  minimal managed config (no framework; personal tweaks go in
-  `~/.zshrc.local`), Hyprland + example config, TTY1 autologin,
+  minimal managed config for root (no framework; the user's zsh config
+  comes from the dotfiles role), Hyprland, TTY1 autologin,
   Neovim/Fastfetch, Zen Browser, NTP, boot-time tweaks.
+- **`packages_desktop` role**: everything the
+  [void.dot](https://github.com/stivce/void.dot) dotfiles assume at
+  runtime — hyprlock/hypridle/hyprpolkitagent/hyprshot (from the
+  hyprland-void repo), kitty, SwayNotificationCenter, awww, quickshell,
+  matugen, pavucontrol, nautilus, qt5ct, OBS, the script dependencies
+  (grim, slurp, wl-clipboard, playerctl, brightnessctl, jq, libnotify,
+  ImageMagick, starship, fzf), the JetBrainsMono Nerd Font (latest
+  GitHub release, installed once), the Volantes Light cursor theme
+  (`XCURSOR_THEME` in the dotfiles; not packaged anywhere, so it's built
+  from upstream source once and symlinked under the name the dotfiles
+  expect), and NetworkManager — which replaces
+  the installer's dhcpcd, because the dotfiles' network menu and swaync
+  drive everything through `nmcli`. The dhcpcd→NM handoff runs
+  fire-and-forget so the playbook survives the momentary interface
+  reconfiguration of its own SSH connection.
 - **`packages_gaming` role**: everything from gaming.md — GameMode/
   MangoHud, Steam, ProtonPlus, Prism Launcher, World of Warcraft via
   umu-launcher + a generated Battle.net launcher script, Discord, and
   CurseForge (prepares `~/.local/bin`/PATH; the AppImage itself still has
   to be downloaded manually — there's no stable direct-download URL for
   it).
+- **`dotfiles` role** (runs last): clones
+  [void.dot](https://github.com/stivce/void.dot) into `~/.dotfiles`
+  (once — never force-updated, since the symlinks make that checkout the
+  live config) and symlinks its contents into place: every entry of
+  `.config/`, `.local/bin/`, `.local/share/` and `Pictures/`, plus
+  `~/.zshrc` and `~/.gitconfig`. Real files already at a destination
+  (e.g. the generated fastfetch config, or the previously managed
+  `~/.zshrc`) are moved aside to `<name>.pre-dotfiles`, never deleted.
+  `~/.dotfiles` is the fixed path because hyprland.conf and waybar
+  reference it directly.
 
 Parts 1-14 of `install-guide.md` (partitioning through first boot) and
 Part 16 (mirror selection) are deliberately not repeated here — the first

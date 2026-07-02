@@ -1,0 +1,178 @@
+---
+# Everything the void.dot dotfiles assume at runtime: the applications
+# they ship configs for, and the binaries their scripts and keybinds
+# call. The dotfiles role clones and symlinks the configs themselves.
+
+- name: "Hypr_tools: lock, idle, polkit agent, screenshots"
+  # These come from the hyprland-void community repo, which the
+  # packages_base Hyprland block has already registered and trusted.
+  community.general.xbps:
+    name:
+      - hyprlock # hyprlock.conf + start-hyprlock keybind
+      - hypridle # hypridle.conf + exec-once
+      - hyprpolkitagent # exec-once in hyprland.conf
+      - hyprshot # misc/screenshot-region*
+    state: latest
+
+- name: "Desktop_apps: applications the dotfiles ship configs for"
+  community.general.xbps:
+    name:
+      - kitty # $terminal in hyprland.conf (foot stays as a fallback)
+      - SwayNotificationCenter # swaync config + waybar on-click
+      - awww # wallpaper daemon: exec-once + misc/set-wallpaper
+      - quickshell # .config/quickshell/HyprQuickFrame
+      - matugen # theming pipeline
+      - pavucontrol # pavucontrol.ini + waybar on-click
+      - nautilus # $fileManager in hyprland.conf
+      - qt5ct # .config/qt5ct + QT_QPA_PLATFORMTHEME in env.conf
+      - obs # .config/obs-studio
+    state: latest
+
+- name: "Script_deps: binaries the dotfiles scripts call"
+  community.general.xbps:
+    name:
+      - grim # screenshots (with hyprshot)
+      - slurp # region selection for grim/hyprshot
+      - wl-clipboard # wl-copy in scripts
+      - playerctl # media keybinds
+      - brightnessctl # brightness keybinds
+      - jq # waybar/script JSON plumbing
+      - libnotify # notify-send, used all over the scripts
+      - ImageMagick # magick, used by swaync-fake-blur
+      - starship # zshrc.d/30-starship.zsh
+      - fzf # zshrc.d/50-fzf.zsh
+      - fontconfig # fc-cache for the Nerd Font below
+    state: latest
+
+- name: "Nerd_font: JetBrainsMono Nerd Font (kitty font_family)"
+  block:
+    - name: Check whether the font is already installed
+      ansible.builtin.stat:
+        path: /usr/share/fonts/JetBrainsMonoNerd/JetBrainsMonoNerdFont-Regular.ttf
+      register: packages_desktop_font
+
+    - name: Install the font
+      when: not packages_desktop_font.stat.exists
+      block:
+        # releases/latest/download/ always resolves to the newest release,
+        # in keeping with the no-version-pinning rule. Once installed the
+        # font is left alone (same spirit as other install-once artifacts).
+        - name: Download JetBrainsMono Nerd Font (latest release)
+          ansible.builtin.get_url:
+            url: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz
+            dest: /tmp/JetBrainsMono-nerd.tar.xz
+            mode: "0644"
+
+        - name: Ensure the font directory exists
+          ansible.builtin.file:
+            path: /usr/share/fonts/JetBrainsMonoNerd
+            state: directory
+            mode: "0755"
+
+        - name: Extract the font
+          ansible.builtin.unarchive:
+            src: /tmp/JetBrainsMono-nerd.tar.xz
+            dest: /usr/share/fonts/JetBrainsMonoNerd
+            remote_src: true
+
+        - name: Refresh the fontconfig cache
+          ansible.builtin.command: fc-cache -f
+          changed_when: true
+
+- name: "Cursor_theme: Volantes Light (XCURSOR_THEME in the dotfiles)"
+  # Not packaged in Void and upstream publishes no prebuilt release, so
+  # build it from source exactly once. inkscape/xcursorgen are only
+  # needed for this build but are left installed — silently removing
+  # packages a user may also want is worse than the disk space.
+  block:
+    - name: Check whether the cursor theme is already installed
+      ansible.builtin.stat:
+        path: /usr/share/icons/volantes_light_cursors/index.theme
+      register: packages_desktop_cursors
+
+    - name: Build and install the cursor theme
+      when: not packages_desktop_cursors.stat.exists
+      block:
+        - name: Install cursor theme build dependencies
+          community.general.xbps:
+            name:
+              - git
+              - make
+              - inkscape
+              - xcursorgen
+            state: latest
+
+        - name: Clone volantes-cursors
+          ansible.builtin.git:
+            repo: https://github.com/varlesh/volantes-cursors.git
+            dest: /tmp/volantes-cursors
+            version: master
+
+        - name: Build the cursor theme (inkscape renders every size — takes a while)
+          ansible.builtin.command: make build
+          args:
+            chdir: /tmp/volantes-cursors
+          changed_when: true
+
+        - name: Install the cursor theme to /usr/share/icons
+          ansible.builtin.command: make install
+          args:
+            chdir: /tmp/volantes-cursors
+          changed_when: true
+
+    # env.conf sets XCURSOR_THEME=Volantes_Light, but upstream installs
+    # the directory as volantes_light_cursors — bridge the name.
+    - name: Symlink the theme under the name the dotfiles expect
+      ansible.builtin.file:
+        src: /usr/share/icons/volantes_light_cursors
+        dest: /usr/share/icons/Volantes_Light
+        state: link
+
+- name: "Networkmanager: the network stack the dotfiles assume"
+  # nw-manager (wofi menu) and the swaync config drive the network via
+  # nmcli, so NetworkManager replaces the installer's dhcpcd. The
+  # packages_base dhcpcd bits stay inert once the handoff is done (its
+  # restart handler checks for the service first).
+  block:
+    - name: Install NetworkManager
+      community.general.xbps:
+        name: NetworkManager
+        state: latest
+
+    - name: Pin the same DNS servers dhcpcd pinned
+      # resolv.conf.head is dhcpcd-specific; this is the NM equivalent.
+      ansible.builtin.copy:
+        dest: /etc/NetworkManager/conf.d/dns-servers.conf
+        content: |
+          [global-dns-domain-*]
+          servers=1.1.1.1,8.8.8.8
+        mode: "0644"
+
+    - name: Disable standalone wpa_supplicant (NM spawns its own)
+      ansible.builtin.file:
+        path: /var/service/wpa_supplicant
+        state: absent
+
+    - name: Check whether NetworkManager is already the active stack
+      ansible.builtin.stat:
+        path: /var/service/NetworkManager
+      register: packages_desktop_nm
+
+    # Stopping dhcpcd deconfigures the interface for a moment, which can
+    # drop this very SSH session. Fire-and-forget (async + poll 0) so
+    # ansible doesn't need the connection mid-blip, then reconnect once
+    # NetworkManager has re-leased the same address.
+    - name: Hand the network stack over from dhcpcd to NetworkManager
+      ansible.builtin.shell: |
+        rm -f /var/service/dhcpcd
+        ln -sf /etc/sv/NetworkManager /var/service/NetworkManager
+      async: 90
+      poll: 0
+      changed_when: true
+      when: not packages_desktop_nm.stat.exists
+
+    - name: Wait for the connection to survive the handoff
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 120
+      when: not packages_desktop_nm.stat.exists

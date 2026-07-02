@@ -1,0 +1,79 @@
+---
+# Clone void.dot into ~/.dotfiles and symlink its contents into place.
+# ~/.dotfiles is load-bearing: hyprland.conf and the waybar config point
+# straight into it (wallpapers, waybar scripts), so the path is fixed.
+
+- name: "Clone: fetch void.dot into ~/.dotfiles"
+  become: true
+  become_user: "{{ ansible_user }}"
+  ansible.builtin.git:
+    repo: "{{ dotfiles_repo }}"
+    dest: "{{ dotfiles_dir }}"
+    version: main
+    # Clone once, never touch again: the symlinks make this checkout the
+    # live config, so a forced update could clobber local edits.
+    update: false
+
+- name: "Dirs: ensure the link destinations exist"
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop:
+    - .config
+    - .local/bin
+    - .local/share
+    - Pictures
+
+- name: "Links: symlink each dotfile group into the home directory"
+  ansible.builtin.include_tasks: link.yml
+  loop:
+    - src: "{{ dotfiles_dir }}/.config"
+      dest: "/home/{{ ansible_user }}/.config"
+    - src: "{{ dotfiles_dir }}/.local/bin"
+      dest: "/home/{{ ansible_user }}/.local/bin"
+    - src: "{{ dotfiles_dir }}/.local/share"
+      dest: "/home/{{ ansible_user }}/.local/share"
+    - src: "{{ dotfiles_dir }}/Pictures"
+      dest: "/home/{{ ansible_user }}/Pictures"
+  loop_control:
+    loop_var: dotfiles_group
+    label: "{{ dotfiles_group.src }}"
+
+- name: "Toplevel: stat the home-level dotfiles"
+  ansible.builtin.stat:
+    path: "/home/{{ ansible_user }}/{{ item }}"
+  loop:
+    - .zshrc
+    - .gitconfig
+  register: dotfiles_toplevel_stats
+
+# The managed .zshrc that packages_base used to copy here lands in the
+# backup on already-provisioned hosts; the dotfiles' zshrc.d-sourcing
+# .zshrc takes over (root keeps the managed copy).
+- name: "Toplevel: move aside real files that would collide"
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ item.stat.path }}"
+      - "{{ item.stat.path }}.pre-dotfiles"
+  when: item.stat.exists and not item.stat.islnk
+  loop: "{{ dotfiles_toplevel_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  changed_when: true
+
+- name: "Toplevel: symlink home-level dotfiles"
+  ansible.builtin.file:
+    src: "{{ dotfiles_dir }}/{{ item }}"
+    dest: "/home/{{ ansible_user }}/{{ item }}"
+    state: link
+    force: true
+    follow: false
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - .zshrc
+    - .gitconfig

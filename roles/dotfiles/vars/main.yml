@@ -1,0 +1,3 @@
+---
+dotfiles_repo: https://github.com/stivce/void.dot.git
+dotfiles_dir: "/home/{{ ansible_user }}/.dotfiles"

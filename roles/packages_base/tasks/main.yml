@@ -94,21 +94,19 @@
         path: "/home/{{ ansible_user }}/.oh-my-zsh"
         state: absent
 
-    # Fully managed: the old OMZ-generated .zshrc would break once
-    # ~/.oh-my-zsh is gone. Personal tweaks belong in ~/.zshrc.local,
-    # which the managed file sources last.
-    - name: Install minimal .zshrc for the user and root
+    # Root only: the user's .zshrc comes from the dotfiles role (void.dot
+    # ships a zshrc.d-based config). Root keeps this minimal managed copy;
+    # personal tweaks for root belong in /root/.zshrc.local, which it
+    # sources last.
+    - name: Install minimal .zshrc for root
       ansible.builtin.copy:
         src: zshrc
-        dest: "{{ item.home }}/.zshrc"
-        owner: "{{ item.owner }}"
-        group: "{{ item.owner }}"
+        dest: /root/.zshrc
+        owner: root
+        group: root
         mode: "0644"
-      loop:
-        - { home: "/home/{{ ansible_user }}", owner: "{{ ansible_user }}" }
-        - { home: /root, owner: root }
 
-- name: "Hyprland: compositor + example config"
+- name: "Hyprland: compositor"
   block:
     - name: Add hyprland-void community repo
       ansible.builtin.copy:
@@ -175,37 +173,20 @@
       # "elogind is already running" and runit restarts it every second,
       # spamming the TTY. Only D-Bus may start elogind.
 
-    - name: Ensure ~/.config/hypr exists
-      ansible.builtin.file:
-        path: "/home/{{ ansible_user }}/.config/hypr"
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
-
-    - name: Install example Hyprland config (won't overwrite an existing one)
-      ansible.builtin.template:
-        src: hyprland.conf.j2
-        dest: "/home/{{ ansible_user }}/.config/hypr/hyprland.conf"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0644"
-        force: false
-      vars:
-        hyprland_nvidia: true
-
 - name: "Autologin_hyprland: TTY1 autologin + autostart"
   block:
     # Void ships /etc/sv/agetty-tty{2..6}/conf as symlinks to tty1's conf,
     # so editing tty1's would otherwise enable autologin on every TTY.
-    # Replace the symlinks with a plain default conf first.
-    - name: Give TTY2/TTY3 their own default conf (unshare from TTY1)
+    # Replace the symlinks with a plain default conf first — all of them,
+    # not just the enabled ones, so enabling tty4-6 later can't silently
+    # bring autologin along.
+    - name: Give TTY2-TTY6 their own default conf (unshare from TTY1)
       ansible.builtin.copy:
         dest: "/etc/sv/agetty-tty{{ item }}/conf"
         content: 'GETTY_ARGS="--noclear"'
         follow: false
         mode: "0644"
-      loop: [2, 3]
+      loop: [2, 3, 4, 5, 6]
 
     - name: Enable agetty autologin on TTY1
       ansible.builtin.lineinfile:

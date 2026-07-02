@@ -9,4 +9,8 @@
     - system
     - flathub
     - packages_base
+    - packages_desktop
     - packages_gaming
+    # Last: needs zsh, hyprland and the desktop apps in place before the
+    # symlinked configs take over from any generated/managed defaults.
+    - dotfiles
