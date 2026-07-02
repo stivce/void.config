@@ -3,8 +3,6 @@
   ansible.builtin.command: grub-mkconfig -o /boot/grub/grub.cfg
   changed_when: true
 
-# No-op once packages_desktop has handed the network stack over to
-# NetworkManager and the dhcpcd service is gone.
 - name: Restart dhcpcd
-  ansible.builtin.shell: "! test -e /var/service/dhcpcd || sv restart dhcpcd"
+  ansible.builtin.command: sv restart dhcpcd
   changed_when: true

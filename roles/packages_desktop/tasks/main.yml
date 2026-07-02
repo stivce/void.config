@@ -133,51 +133,11 @@
         dest: /usr/share/icons/Volantes_Light
         state: link
 
-- name: "Networkmanager: the network stack the dotfiles assume"
-  # nw-manager (wofi menu) and the swaync config drive the network via
-  # nmcli, so NetworkManager replaces the installer's dhcpcd. The
-  # packages_base dhcpcd bits stay inert once the handoff is done (its
-  # restart handler checks for the service first).
-  block:
-    - name: Install NetworkManager
-      community.general.xbps:
-        name: NetworkManager
-        state: latest
-
-    - name: Pin the same DNS servers dhcpcd pinned
-      # resolv.conf.head is dhcpcd-specific; this is the NM equivalent.
-      ansible.builtin.copy:
-        dest: /etc/NetworkManager/conf.d/dns-servers.conf
-        content: |
-          [global-dns-domain-*]
-          servers=1.1.1.1,8.8.8.8
-        mode: "0644"
-
-    - name: Disable standalone wpa_supplicant (NM spawns its own)
-      ansible.builtin.file:
-        path: /var/service/wpa_supplicant
-        state: absent
-
-    - name: Check whether NetworkManager is already the active stack
-      ansible.builtin.stat:
-        path: /var/service/NetworkManager
-      register: packages_desktop_nm
-
-    # Stopping dhcpcd deconfigures the interface for a moment, which can
-    # drop this very SSH session. Fire-and-forget (async + poll 0) so
-    # ansible doesn't need the connection mid-blip, then reconnect once
-    # NetworkManager has re-leased the same address.
-    - name: Hand the network stack over from dhcpcd to NetworkManager
-      ansible.builtin.shell: |
-        rm -f /var/service/dhcpcd
-        ln -sf /etc/sv/NetworkManager /var/service/NetworkManager
-      async: 90
-      poll: 0
-      changed_when: true
-      when: not packages_desktop_nm.stat.exists
-
-    - name: Wait for the connection to survive the handoff
-      ansible.builtin.wait_for_connection:
-        delay: 5
-        timeout: 120
-      when: not packages_desktop_nm.stat.exists
+# Deliberately absent: NetworkManager. The dotfiles' nw-manager wofi
+# menu and a swaync button want nmcli, but on this wired box dhcpcd
+# (set up by the installer) does the job with none of the stack-swap
+# risk — those two menu entries are Arch-era leftovers.
+- name: "Networkmanager: not used — ensure it's gone"
+  community.general.xbps:
+    name: NetworkManager
+    state: absent

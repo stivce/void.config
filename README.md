@@ -28,14 +28,13 @@ unattended — no prompts, every feature below is always applied.
   matugen, pavucontrol, nautilus, qt5ct, OBS, the script dependencies
   (grim, slurp, wl-clipboard, playerctl, brightnessctl, jq, libnotify,
   ImageMagick, starship, fzf), the JetBrainsMono Nerd Font (latest
-  GitHub release, installed once), the Volantes Light cursor theme
+  GitHub release, installed once), and the Volantes Light cursor theme
   (`XCURSOR_THEME` in the dotfiles; not packaged anywhere, so it's built
   from upstream source once and symlinked under the name the dotfiles
-  expect), and NetworkManager — which replaces
-  the installer's dhcpcd, because the dotfiles' network menu and swaync
-  drive everything through `nmcli`. The dhcpcd→NM handoff runs
-  fire-and-forget so the playbook survives the momentary interface
-  reconfiguration of its own SSH connection.
+  expect). Deliberately *not* installed: NetworkManager — the dotfiles'
+  `nw-manager` menu wants `nmcli`, but on a wired box the installer's
+  dhcpcd does the job without a risky stack swap, so the role ensures
+  NM is absent and the menu entry stays an unused Arch-era leftover.
 - **`packages_gaming` role**: everything from gaming.md — GameMode/
   MangoHud, Steam, ProtonPlus, Prism Launcher, World of Warcraft via
   umu-launcher + a generated Battle.net launcher script, Discord, and
