@@ -2,6 +2,9 @@
 - name: Configure a void.install box
   hosts: all
   gather_facts: true
+  # Run pending handlers even if the play fails — otherwise an aborted run
+  # can leave e.g. /etc/default/grub edited but grub.cfg never regenerated.
+  force_handlers: true
   roles:
     - system
     - flathub

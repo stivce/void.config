@@ -196,6 +196,17 @@
 
 - name: "Autologin_hyprland: TTY1 autologin + autostart"
   block:
+    # Void ships /etc/sv/agetty-tty{2..6}/conf as symlinks to tty1's conf,
+    # so editing tty1's would otherwise enable autologin on every TTY.
+    # Replace the symlinks with a plain default conf first.
+    - name: Give TTY2/TTY3 their own default conf (unshare from TTY1)
+      ansible.builtin.copy:
+        dest: "/etc/sv/agetty-tty{{ item }}/conf"
+        content: 'GETTY_ARGS="--noclear"'
+        follow: false
+        mode: "0644"
+      loop: [2, 3]
+
     - name: Enable agetty autologin on TTY1
       ansible.builtin.lineinfile:
         path: /etc/sv/agetty-tty1/conf
