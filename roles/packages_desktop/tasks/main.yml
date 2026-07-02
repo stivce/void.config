@@ -57,6 +57,11 @@
         # releases/latest/download/ always resolves to the newest release,
         # in keeping with the no-version-pinning rule. Once installed the
         # font is left alone (same spirit as other install-once artifacts).
+        - name: Install xz (unarchive needs it for the .tar.xz)
+          community.general.xbps:
+            name: xz
+            state: latest
+
         - name: Download JetBrainsMono Nerd Font (latest release)
           ansible.builtin.get_url:
             url: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz
