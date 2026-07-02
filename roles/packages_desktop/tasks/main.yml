@@ -12,6 +12,7 @@
       - hypridle # hypridle.conf + exec-once
       - hyprpolkitagent # exec-once in hyprland.conf
       - hyprshot # misc/screenshot-region*
+      - hyprland-guiutils # Hyprland warns at startup without it
     state: latest
 
 - name: "Desktop_apps: applications the dotfiles ship configs for"
