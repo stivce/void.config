@@ -86,19 +86,24 @@ walkthrough and isn't automated.
   remount of `/`, so a reboot is needed to apply them.
 - `inventory/hosts.yml` is gitignored, same pattern as void.install's
   `void.cfg` — only the `.example` file is tracked.
-- **The xbps hang, properly diagnosed** (2026-07-02): `xbps-install -S`
-  can wedge forever mid-sync with `CLOSE-WAIT` sockets — the server
-  closed the connection, unread bytes sit in the receive queue, and
-  xbps's bundled libfetch blocks in a read with no timeout. Earlier
-  theories are wrong: it is *not* IPv6 (a plain Python client fetched
-  the same repodata over IPv6 from the same box in 0.2s while xbps hung)
-  and *not* Fastly (it was observed live hanging against
-  `repo-de.voidlinux.org`, a direct mirror, and `repo-default` is just a
-  CNAME to the `repo-fi` origin — not a CDN edge). xbps 0.60.7 has no
-  timeout setting, so the playbook defends itself instead: every
-  index-refresh/upgrade goes through a timeout-kill-retry wrapper
-  (`roles/system/tasks/xbps_sync.yml`,
-  `roles/packages_base/tasks/refresh_index.yml`). The `system` role also
-  points the nonfree/multilib sub-repositories at the chosen fastest
-  mirror — by default those silently kept using `repo-default` because
-  only the main repo conf was overridden.
+- **The xbps "hang", properly diagnosed** (2026-07-02): it was never a
+  network problem. `xbps-install -S` prompts on **stdin** before
+  trusting a new repository signing key — and deliberately ignores `-y`
+  for that prompt. Under ansible, stdin is a pipe that never answers,
+  so the process blocked forever the moment the hyprland-void repo
+  (signed by `hyprland-void-github-action`, an unknown key) entered the
+  config. Everything else was a red herring chased across three
+  workaround commits: not IPv6, not Fastly, not libfetch — the
+  `CLOSE-WAIT` sockets with unread bytes were just idle keep-alive
+  connections whose servers gave up while xbps sat waiting at the
+  prompt (plain-client fetches of the same URLs succeeded instantly the
+  whole time). The fix: `packages_base` imports the repo key explicitly
+  (`yes y | xbps-install -S`, guarded by a fingerprint check) before
+  any module-driven sync can meet the prompt. The timeout-kill-retry
+  wrappers (`roles/system/tasks/xbps_sync.yml`,
+  `roles/packages_base/tasks/refresh_index.yml`) stay as defense in
+  depth — a future unknown key or a genuinely dead mirror now costs
+  minutes, not an infinite hang. The `system` role also points the
+  nonfree/multilib sub-repositories at the chosen fastest mirror; those
+  silently kept using `repo-default` before, because only the main repo
+  conf was overridden.

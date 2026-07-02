@@ -1,11 +1,12 @@
 ---
-# Hang-resistant xbps sync. xbps's bundled libfetch can block forever
-# reading a connection the server has already closed (observed live on
-# 2026-07-02: xbps-install -S wedged with CLOSE-WAIT sockets to two
-# different direct mirrors while a plain HTTP client fetched the same
-# repodata in 0.2s — over IPv6 too, so neither IPv6 nor Fastly is the
-# culprit). xbps 0.60.7 has no timeout knob, so: bound the task with a
-# timeout, kill the hung process, retry once, then fail clearly.
+# Hang-resistant xbps sync. The historical "xbps hang" turned out to be
+# xbps-install prompting on stdin to import an unknown repo signing key
+# (it ignores -y for that prompt) — under ansible, stdin never answers,
+# so it blocked forever; the CLOSE-WAIT sockets were just idle keep-alive
+# connections and a red herring. Keys are now imported explicitly before
+# syncs (see the hyprland-void tasks in packages_base), but keep this
+# wrapper as defense in depth: any future unknown key, or a genuinely
+# hung mirror, costs one timeout and a retry instead of an infinite hang.
 #
 # Include with:
 #   system_xbps_sync_upgrade_xbps: also upgrade xbps itself (default false)

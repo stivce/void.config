@@ -11,10 +11,10 @@ void_keymap: us
 #
 # Excludes the aliases repo-default.voidlinux.org (a CNAME to the
 # repo-fi origin, already listed below) and repo-fastly.voidlinux.org
-# (CDN-fronted, not a fixed origin). Note the xbps hang documented in
-# the README is NOT mirror-specific — it's a libfetch bug in xbps
-# itself and has been observed against direct mirrors too; the playbook
-# handles it with timeout-and-retry wrappers rather than mirror choice.
+# (CDN-fronted, not a fixed origin). The historical "xbps hang" was
+# never mirror-related at all — it was xbps's stdin prompt for unknown
+# repo signing keys (see README); mirror choice here is purely about
+# speed.
 void_mirror_candidates:
   - https://repo-de.voidlinux.org
   - https://repo-fi.voidlinux.org

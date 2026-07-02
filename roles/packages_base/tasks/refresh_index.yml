@@ -1,7 +1,8 @@
 ---
-# Hang-resistant index refresh — same libfetch-hang protection as the
-# system role's xbps_sync.yml (see the explanation there): timeout, kill
-# the hung process, retry once, fail clearly.
+# Hang-resistant index refresh — same protection as the system role's
+# xbps_sync.yml (see the explanation there: the historical hang was
+# xbps's stdin key-import prompt, now handled explicitly; this wrapper
+# stays as defense in depth): timeout, kill, retry once, fail clearly.
 - name: Refresh package index, bounded by a timeout
   block:
     - name: Refresh package index

@@ -116,6 +116,27 @@
         content: "repository=https://raw.githubusercontent.com/sofijacom/hyprland-void/repository-x86_64-glibc\n"
         mode: "0644"
 
+    # Key owner "hyprland-void-github-action". xbps-install prompts on
+    # stdin before trusting a new repo signing key (deliberately ignoring
+    # -y); under ansible stdin never answers, so the prompt blocks forever
+    # — this was the "xbps hang" all along. Import the key once,
+    # explicitly, before any module-driven sync meets the prompt.
+    - name: Check whether the hyprland-void signing key is imported
+      ansible.builtin.stat:
+        path: "/var/db/xbps/keys/b3:21:c4:43:d9:38:6f:ec:36:64:0d:65:37:13:c1:fe.plist"
+      register: packages_base_hyprland_key
+
+    - name: Import the hyprland-void repo signing key
+      ansible.builtin.command: xbps-install -S
+      args:
+        stdin: |
+          y
+          y
+          y
+      when: not packages_base_hyprland_key.stat.exists
+      changed_when: true
+      timeout: 120
+
     - name: Refresh package index for the new repo
       ansible.builtin.include_tasks: refresh_index.yml
 
@@ -314,7 +335,7 @@
           {{ (packages_base_root_opts
               + (packages_base_perf_opts | reject('in', packages_base_root_opts) | list))
              | join(',') }}
-        state: latest
+        state: present
       vars:
         packages_base_root_opts: "{{ packages_base_fstab_root[3].split(',') }}"
         packages_base_perf_opts:
